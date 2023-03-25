@@ -1,0 +1,55 @@
+###########################################################
+# .GITIGNORE FILE
+# IGNORE THESE FILE TYPES AS WELL AS THE FOLDERS -  Baker
+###########################################################
+
+###############
+# Directories #
+###############
+bin/
+obj/
+.vs/
+TestResults/
+
+###################
+# docs to ignore  #
+###################
+Docs/*.pdf
+Docs/*.jpg
+
+###################
+# compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.pdb
+*.dll.config
+*.cache
+*.suo
+
+############
+# Packages #
+############
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+######################
+# Logs and databases #
+######################
+*.log
+#ToolDataServiceWorkSpace.code-workspace
+.vs/ToolDataService/DesignTimeBuild/.dtbcache
+.vs/ToolDataService/v15/Server/sqlite3/db.lock
+.vs/ToolDataService/v15/Server/sqlite3/storage.ide
+.vs/ToolDataService/v15/Server/sqlite3/storage.ide-shm
+.vs/ToolDataService/v15/Server/sqlite3/storage.ide-wal
+.vs/ToolDataService/v16/Server/sqlite3/db.lock
+.vs/ToolDataService/v16/Server/sqlite3/storage.ide
