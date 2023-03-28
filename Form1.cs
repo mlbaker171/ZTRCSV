@@ -6,7 +6,11 @@ using System;
 using System.Globalization;
 using System.Security.Policy;
 using System.Text;
+using ZTWebShared.Mongo;
+using ZTWebShared.DataModels;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
+using MongoDB.Driver;
+using System.Xml.Linq;
 
 namespace CSVPlot
 {
@@ -28,13 +32,26 @@ namespace CSVPlot
         public const string TAB = "\t ";
         const int MAX_LIST_VAL = 20;
 
+        //MONGODB STUFF
+        const string MONGO_CONNECTION_STRING = "mongodb://10.2.1.18:27017";
+        public const string OPERATIONS_DATABASE_NAME = "Operations";
+        public const string WORKORDER_COLLECTION_NAME = "WorkOrder";
+        public const string BREMBO_DATABASE_NAME = "ZTR04_Brembo";
+        public const string BREMBO_DISK_COLLECTION_NAME = "PartData";
+        public const string THERMO_COLLECTION_NAME = "ThermoData";
+       
+        MongoDatabaseClient MyMongoClient = null;
+        DateTime WorkOrder_Start;
+        List<CSVBremboDisk> BremboDiskList;
+        List<ThermoData> ThermoDataList;
+        List<BremboDiskDBTransaction> BremboDiskDBTransactionList = new List<BremboDiskDBTransaction>();
 
-
-
+        #region CONSTRUCTOR
         public Form1()
         {
             InitializeComponent();
         }
+        #endregion
 
         #region SUPPORT FUNCTIONS
 
@@ -48,7 +65,7 @@ namespace CSVPlot
             return timeStamp;
         }
 
-        public List<ThermoData> MakeThermoData()
+        public List<ThermoData> MakeFakeThermoData()
         {
             List<ThermoData> retList = new List<ThermoData>();
 
@@ -61,7 +78,121 @@ namespace CSVPlot
             return retList;
         }
 
+        private WorkOrderData BuildWorkOrder()
+        {
+            string szNotes = String.Empty;
+            WorkOrderData myWorkOrder = new WorkOrderData();
+            myWorkOrder.DateTimeIssued = DateTime.Now;
+            myWorkOrder.DateTimeStarted = WorkOrder_Start;
+            myWorkOrder.ToolID = cbox_ToolID.SelectedText;
+            myWorkOrder.DateTimeDone = DateTime.Now;
+            myWorkOrder.ID = txbx_WorkOrderID.Text;
+            myWorkOrder.WOTypeString = "PERFORMANCE";
+            myWorkOrder.Project = "BREMBO_1";
+            myWorkOrder.SetState(WorkOrderData.STATE.COMPLETE);
+            myWorkOrder.Notes = txbx_WorkOrderNotes.Text + "....Created by ZTR CSV Insertion App.";
+            myWorkOrder.InspectionEntityList.Clear();
+
+            return myWorkOrder;
+        }
+
         #endregion
+
+        #region MONGODB FUNCTIONS
+
+        public void ConvertBremboCSVToTransactionsAndDelete()
+        {
+            BremboDiskDBTransactionList.Clear();
+            AddToStatusDisplay("Converting Brembo CSV Entities to Mongo Data Transactions");
+            foreach (CSVBremboDisk bremborecord in BremboDiskList)
+            {
+                BremboDiskDBTransactionList.Add(new BremboDiskDBTransaction(bremborecord));
+            }
+
+            AddToStatusDisplay("Converted [ " + BremboDiskDBTransactionList.Count.ToString() + " ] Brembo CSV Entities");
+            BremboDiskList.Clear();
+        }
+
+        public bool ConnectToMongo(string databaseName)
+        {
+            MyMongoClient = new MongoDatabaseClient(MONGO_CONNECTION_STRING, databaseName);
+            if (true == MyMongoClient.IsConnected())
+            {
+                AddToStatusDisplay("MONGO CLIENT CONNECTED: " + MyMongoClient.IPAddressString + " TRUE");
+            }
+            else
+            {
+                AddToStatusDisplay("MONGO CLIENT CONNECTED: " + MyMongoClient.IPAddressString + " FALSE");
+            }
+            return MyMongoClient.IsConnected();
+        }
+
+        public void SendToWorkOrderDatabase()
+        {
+            IMongoCollection<WorkOrderData> myCollection = null;
+
+            bool isconnected = ConnectToMongo(OPERATIONS_DATABASE_NAME);
+            if ((null != MyMongoClient) && (true == MyMongoClient.IsConnected()))
+            {
+                myCollection = MyMongoClient.GetDataBase.GetCollection<WorkOrderData>(WORKORDER_COLLECTION_NAME);  //Get the collection
+                AddToStatusDisplay("Accessing Collection: " + myCollection.CollectionNamespace.ToString());
+                WorkOrderData tempWO = BuildWorkOrder();
+                myCollection.InsertOne(tempWO);
+
+                AddToStatusDisplay("Inserted Into WorkOrder Collection: " + tempWO.ID + " [" + tempWO.Project + "]  DATABASE:" + MyMongoClient.GetDatabaseName + " COLLECTION:" + myCollection.CollectionNamespace);
+
+            }
+            else
+            {
+                AddToStatusDisplay("Not Connected to: " + OPERATIONS_DATABASE_NAME + "." + WORKORDER_COLLECTION_NAME);
+            }
+        }
+
+        public void SendToMongoThermoData()
+        {
+            IMongoCollection<ThermoData> myCollection = null;
+
+            foreach (ThermoData idata in ThermoDataList)
+            {
+                bool isconnected = ConnectToMongo(THERMO_COLLECTION_NAME);
+
+                if ((null != MyMongoClient) && (true == MyMongoClient.IsConnected()))
+                {
+                    myCollection = MyMongoClient.GetDataBase.GetCollection<ThermoData>(THERMO_COLLECTION_NAME);  //Get the collection
+                    AddToStatusDisplay("Accessing Collection: " + myCollection.CollectionNamespace.ToString());
+                }
+
+                myCollection.InsertOne(idata);
+                AddToStatusDisplay("Inserted Into Collection: " + idata.ToString() + "]  DATABASE:" + MyMongoClient.GetDatabaseName + " COLLECTION:" + myCollection.CollectionNamespace);
+
+            }
+        }
+
+        public void SendToMongoPartData()
+        {
+            bool isconnected = ConnectToMongo(BREMBO_DATABASE_NAME);
+            IMongoCollection<BremboDiskDBTransaction> myCollection = null;
+            int idx = 1;
+            foreach (BremboDiskDBTransaction idata in BremboDiskDBTransactionList)
+            {
+                if ((null == myCollection) && (true == MyMongoClient.IsConnected()))
+                {
+                    myCollection = MyMongoClient.GetDataBase.GetCollection<BremboDiskDBTransaction>(BREMBO_DISK_COLLECTION_NAME);  //Get the collection
+                    AddToStatusDisplay("In DATABASE: " + MyMongoClient.GetDatabaseName);
+                    AddToStatusDisplay("Accessing COLLECTION: " + myCollection.CollectionNamespace.ToString());
+                }
+
+                myCollection.InsertOne(idata);
+
+                idx++;
+            }
+           
+            AddToStatusDisplay("Inserted [ " + idx.ToString() + " ] Entries ");
+           
+        }
+
+        #endregion
+
 
         #region THREAD SAFE UI UPDATES
 
@@ -89,16 +220,52 @@ namespace CSVPlot
         }
         private delegate void AddToStatusDisplayDelegate(string szData);
         /////////////////////////////////////////////////////////////////
+
+        public void ClearWorkOrderUI()
+        {
+            //Check to see of this is being called from a different thread
+            if (this.InvokeRequired)
+            {   //This is being called from a different thread so use beginInvoke
+                //and the associated delelgate to have the main (UI) thread call it.
+                this.BeginInvoke(new ClearWorkOrderUIDelegate(ClearWorkOrderUI), new object[] { });
+                return;
+            }
+            else
+            {
+                txbx_WorkOrderNotes.Clear();
+            }
+        }
+        private delegate void ClearWorkOrderUIDelegate();
+        /////////////////////////////////////////////////////////////////
+
+        public void InitializeToolIDUI(List<string> toolChoices)
+        {
+            //Check to see of this is being called from a different thread
+            if (this.InvokeRequired)
+            {   //This is being called from a different thread so use beginInvoke
+                //and the associated delelgate to have the main (UI) thread call it.
+                this.BeginInvoke(new InitializeToolIDUIDelegate(InitializeToolIDUI), new object[] { toolChoices });
+                return;
+            }
+            else
+            {
+              foreach(string s in toolChoices) 
+                {
+                    cbox_ToolID.Items.Add(s);
+                }
+            }
+        }
+        private delegate void InitializeToolIDUIDelegate(List<string> toolChoices);
+        /////////////////////////////////////////////////////////////////
+
+
         #endregion
 
-
         #region SPECIFIC CSVHELPER BASED FUNCTIONALITY
-
-      
-
         //https://stackoverflow.com/questions/59046788/skip-rows-from-csv-file
         //https://duongnt.com/read-csv-helper/
         //https://joshclose.github.io/CsvHelper/examples/reading/reading-by-hand/
+
         private void LoadThermoDataFromCSVFile(string filepathname)
         {
             var localconfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -129,6 +296,7 @@ namespace CSVPlot
                     };
                     recordList.Add(record);
                 }
+                ThermoDataList = recordList;
 
                 AddToStatusDisplay("Loaded " + recordList.Count.ToString() + " ThermoData Entries from file");
             }
@@ -143,7 +311,7 @@ namespace CSVPlot
                 IgnoreBlankLines = false
             };
 
-            var recordList = new List<BremboDisk>();
+            var recordList = new List<CSVBremboDisk>();
 
             using (var reader = new StreamReader(filepathname))
             using (var csv = new CsvReader(reader, localconfiguration))
@@ -162,12 +330,14 @@ namespace CSVPlot
                 {
                     try
                     {
-                        var record = new BremboDisk
+                        var record = new CSVBremboDisk
                         {
                             //NEED TO ADD THEM ALL IN HERE
                             Date = csv.GetField<string>("Date"),
                             Name = csv.GetField<string>("Name"),
                             PartID = csv.GetField<string>("PartID"),
+                            ReportPath = csv.GetField<string>("reportPath"),
+                            Operator = csv.GetField<string>("Operator"),
 
                             FDiam = csv.GetField<double>("F Diam."),
                             M2_D_C_D = csv.GetField<double>("M2-D/C D"),
@@ -184,7 +354,7 @@ namespace CSVPlot
                             M18_D = csv.GetField<double>("M18 D"),
                             M29_A = csv.GetField<double>("M29-A Val."),
 
-                            M32_A = csv.GetField<double>("M32-B Val."),
+                            M32_B = csv.GetField<double>("M32-B Val."),
                             M39_A = csv.GetField<double>("M39-A Val."),
                             M42_B = csv.GetField<double>("M42-B Val."),
                             M43_A = csv.GetField<double>("M43-A Val."),
@@ -243,9 +413,11 @@ namespace CSVPlot
                             Temperature_C6_CASE = csv.GetField<double>("temperature_c6_CASE"),
                             Temperature_C6_CMOS = csv.GetField<double>("temperature_c6_CMOS"),
                             Temperature_C6_PROC = csv.GetField<double>("temperature_c6_PROC"),
-
-                        };
-
+                    };
+                        record.ConvertTheCrazyFrenchTimeString();
+                        record.PartID = record.Name;                        //BAKER
+                        record.WorkOrderID = txbx_WorkOrderID.Text;
+                        record.ToolID = cbox_ToolID.Text;
                         recordList.Add(record);
                     }
                    catch(Exception ex) 
@@ -256,14 +428,26 @@ namespace CSVPlot
                    
                 }
 
+                BremboDiskList = recordList;
                 AddToStatusDisplay("Loaded " + recordList.Count.ToString() + " Brembo Entries from file");
             }
         }
 
-
         #endregion
 
         #region FORM AND BUTTON HANDLERS
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            List<string> toollist = new List<string>();
+            toollist.Add("ZTR4_Brembo");
+            toollist.Add("ZTR4_Ford");
+            toollist.Add("BAKER_TEST_TOOL");
+
+            InitializeToolIDUI(toollist);
+
+            AddToStatusDisplay("Application Started");
+        }
 
         private void bn_Quit_Click(object sender, EventArgs e)
         {
@@ -295,7 +479,7 @@ namespace CSVPlot
 
         private void btn_Write_Click(object sender, EventArgs e)
         {
-            List<ThermoData> myTrash = MakeThermoData();
+            List<ThermoData> myTrash = MakeFakeThermoData();
             using (var stream = File.OpenWrite("c:\\Temp\\HOOHAHNEW.csv"))
             using (var writer = new StreamWriter(stream, Encoding.UTF8))
             using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
@@ -305,12 +489,35 @@ namespace CSVPlot
 
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+        private void monthCalendar1_DateSelected(object sender, DateRangeEventArgs e)
         {
-            AddToStatusDisplay("Application Started");
+            int idx = 1;
+            DateTime dtime = e.Start;
+            WorkOrder_Start = e.Start;
+            AddToStatusDisplay("Chose Start Date of: " + WorkOrder_Start.ToString());
+        }
+
+        private void btn_SendAllToMongo_Click(object sender, EventArgs e)
+        {
+            //if(ThermoDataList.Count > 0)
+            //{
+            //    SendToMongoThermoData();
+            //}
+
+            if (BremboDiskList.Count > 0)
+            {
+                ConvertBremboCSVToTransactionsAndDelete();
+                SendToMongoPartData();
+            }
+        }
+
+        private void btn_SendWorkOrder_Click(object sender, EventArgs e)
+        {
+            SendToWorkOrderDatabase();
         }
 
         #endregion
+
 
     }//CLASS
 }//NAMESPACE

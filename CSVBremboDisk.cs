@@ -12,20 +12,15 @@ using MongoDB.Bson.Serialization.Serializers;
 
 namespace CSVPlot
 {
-    public class BremboDisk
+    public class CSVBremboDisk
     {
-        //NOT PART OF THE ORIGINAL DATAFILE
-        [BsonId]
-        public ObjectId id { get; set; }
+        //NOT PART OF ORIGINAL CSV
+        public DateTime DateTimeStamp { get; set; }
+        public string WorkOrderID { get; set; } = "UNDEFINED";
+        public string ToolID { get; set; } = "UNDEFINED";
 
         [Name("Date")]
         public string Date { get; set; }
-
-        //NOT PART OF THE ORIGINAL DATAFILE
-        public string WorkOrderID { get; set; } = "UNDEFINED";
-
-        //NOT PART OF THE ORIGINAL DATAFILE
-        public DateTime DateTimeStamp{get;set;}
 
         [Name("reportPath")]
         public string ReportPath{ get; set; }
@@ -80,7 +75,7 @@ namespace CSVPlot
         public double M29_A { get; set; }
 
         [Name("M32-B Val.")]
-        public double M32_A{ get; set; }
+        public double M32_B{ get; set; }
 
         [Name("M39-A Val.")]
         public double M39_A { get; set; }
@@ -238,7 +233,7 @@ namespace CSVPlot
         [Name("temperature_c6_PROC")]
         public double Temperature_C6_PROC { get; set; }
 
-        public BremboDisk() { }
+        public CSVBremboDisk() { }
 
         
         public void ConvertTheCrazyFrenchTimeString()
@@ -247,18 +242,18 @@ namespace CSVPlot
 
             //DATE STRING HAS TO HAVE THE FOLLOWING STRUCTURE
             //2023-03-21_11H21M57S817MS  - SPLIT THE HELL OUT OF IT STRING
-            string[] mySplits = Date.Split('-','H','M','S');
+            string[] mySplits = Date.Split('_','-','H','M','S');
             //SHOULD CONVERT TO THE FOLLOWING SPLITS[] {"2023", "03", "21", "11", "21", "57", "817"}
            
             if(mySplits.Length > 6 ) 
             {
-                int nYear  =  int.Parse(mySplits[0]);
+                int nYear  = int.Parse(mySplits[0]);
                 int nMonth = int.Parse(mySplits[1]);
-                int nDay   =   int.Parse(mySplits[2]);
-                int nHour =  int.Parse(mySplits[3]);
-                int nMin =   int.Parse(mySplits[4]);
-                int nSec =   int.Parse(mySplits[5]);
-                int nMsec =  int.Parse(mySplits[6]);
+                int nDay   = int.Parse(mySplits[2]);
+                int nHour  = int.Parse(mySplits[3]);
+                int nMin   = int.Parse(mySplits[4]);
+                int nSec   = int.Parse(mySplits[5]);
+                int nMsec  = int.Parse(mySplits[6]);
 
                 retDateTime = new DateTime(nYear, nMonth, nDay, nHour, nMin, nSec, nMsec);
             }

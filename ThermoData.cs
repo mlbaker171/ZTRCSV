@@ -5,11 +5,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CsvHelper;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson.Serialization.Serializers;
 
 namespace CSVPlot
 {
     public class ThermoData
     {
+        //NOT PART OF THE ORIGINAL DATAFILE
+        [BsonId]
+        public ObjectId id { get; set; }
+
         [Name("TIMESTAMP")]
         public DateTime TIMESTAMP { get; set; } 
 

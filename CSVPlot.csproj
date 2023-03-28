@@ -19,4 +19,11 @@
     <PackageReference Include="MongoDB.Driver.Core" Version="2.19.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="ZTWebShared">
+      <HintPath>..\..\Dev\NewZTShared\bin\Debug\net6.0\ZTWebShared.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+
 </Project>
